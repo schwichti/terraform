@@ -4,6 +4,7 @@
 package views
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/hashicorp/terraform/internal/command/arguments"
@@ -60,9 +61,11 @@ func (v *ShowHuman) Display(config *configs.Config, plan *plans.Plan, jsonPlan *
 		RunningInAutomation: v.view.runningInAutomation,
 	}
 
-	// TODO: display jsonPlan instead of plan if one was received
-
-	if plan != nil {
+	// Prefer to display a pre-built JSON plan, if we got one; then, fall back
+	// to building one ourselves.
+	if jsonPlan != nil {
+		renderer.RenderHumanPlan(*jsonPlan.Plan, jsonPlan.Mode, jsonPlan.Opts...)
+	} else if plan != nil {
 		outputs, changed, drift, attrs, err := jsonplan.MarshalForRenderer(plan, schemas)
 		if err != nil {
 			v.view.streams.Eprintf("Failed to marshal plan to json: %s", err)
@@ -124,9 +127,16 @@ type ShowJSON struct {
 var _ Show = (*ShowJSON)(nil)
 
 func (v *ShowJSON) Display(config *configs.Config, plan *plans.Plan, jsonPlan *JsonPlan, stateFile *statefile.File, schemas *terraform.Schemas) int {
-	// TODO: display jsonPlan instead of plan if one was received
-
-	if plan != nil {
+	// Prefer to display a pre-built JSON plan, if we got one; then, fall back
+	// to building one ourselves.
+	if jsonPlan != nil {
+		j, err := json.Marshal(jsonPlan.Plan)
+		if err != nil {
+			v.view.streams.Eprintf("Failed to marshal plan to json: %s", err)
+			return 1
+		}
+		v.view.streams.Println(string(j))
+	} else if plan != nil {
 		jsonPlan, err := jsonplan.Marshal(config, plan, stateFile, schemas)
 
 		if err != nil {
