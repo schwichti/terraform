@@ -4,8 +4,6 @@
 package terraform
 
 import (
-	"log"
-
 	"github.com/hashicorp/terraform/internal/addrs"
 	"github.com/hashicorp/terraform/internal/tfdiags"
 )
@@ -19,7 +17,6 @@ type nodeExpandApplyableResource struct {
 }
 
 var (
-	_ GraphNodeDynamicExpandable    = (*nodeExpandApplyableResource)(nil)
 	_ GraphNodeReferenceable        = (*nodeExpandApplyableResource)(nil)
 	_ GraphNodeReferencer           = (*nodeExpandApplyableResource)(nil)
 	_ GraphNodeConfigResource       = (*nodeExpandApplyableResource)(nil)
@@ -49,56 +46,14 @@ func (n *nodeExpandApplyableResource) Name() string {
 	return n.NodeAbstractResource.Name() + " (expand)"
 }
 
-func (n *nodeExpandApplyableResource) DynamicExpand(ctx EvalContext) (*Graph, error) {
-	var g Graph
-
+func (n *nodeExpandApplyableResource) Execute(ctx EvalContext, op walkOperation) tfdiags.Diagnostics {
+	var diags tfdiags.Diagnostics
 	expander := ctx.InstanceExpander()
 	moduleInstances := expander.ExpandModule(n.Addr.Module)
 	for _, module := range moduleInstances {
-		g.Add(&NodeApplyableResource{
-			NodeAbstractResource: n.NodeAbstractResource,
-			Addr:                 n.Addr.Resource.Absolute(module),
-		})
-	}
-	addRootNodeToGraph(&g)
-
-	return &g, nil
-}
-
-// NodeApplyableResource represents a resource that is "applyable":
-// it may need to have its record in the state adjusted to match configuration.
-//
-// Unlike in the plan walk, this resource node does not DynamicExpand. Instead,
-// it should be inserted into the same graph as any instances of the nodes
-// with dependency edges ensuring that the resource is evaluated before any
-// of its instances, which will turn ensure that the whole-resource record
-// in the state is suitably prepared to receive any updates to instances.
-type NodeApplyableResource struct {
-	*NodeAbstractResource
-
-	Addr addrs.AbsResource
-}
-
-var (
-	_ GraphNodeModuleInstance       = (*NodeApplyableResource)(nil)
-	_ GraphNodeConfigResource       = (*NodeApplyableResource)(nil)
-	_ GraphNodeExecutable           = (*NodeApplyableResource)(nil)
-	_ GraphNodeProviderConsumer     = (*NodeApplyableResource)(nil)
-	_ GraphNodeAttachResourceConfig = (*NodeApplyableResource)(nil)
-	_ GraphNodeReferencer           = (*NodeApplyableResource)(nil)
-)
-
-func (n *NodeApplyableResource) Path() addrs.ModuleInstance {
-	return n.Addr.Module
-}
-
-// GraphNodeExecutable
-func (n *NodeApplyableResource) Execute(ctx EvalContext, op walkOperation) tfdiags.Diagnostics {
-	if n.Config == nil {
-		// Nothing to do, then.
-		log.Printf("[TRACE] NodeApplyableResource: no configuration present for %s", n.Name())
-		return nil
+		ctx = ctx.WithPath(module)
+		diags = diags.Append(n.writeResourceState(ctx, n.Addr.Resource.Absolute(module)))
 	}
 
-	return n.writeResourceState(ctx, n.Addr)
+	return diags
 }
