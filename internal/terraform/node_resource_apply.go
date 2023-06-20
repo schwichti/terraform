@@ -7,8 +7,6 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform/internal/addrs"
-	"github.com/hashicorp/terraform/internal/dag"
-	"github.com/hashicorp/terraform/internal/lang"
 	"github.com/hashicorp/terraform/internal/tfdiags"
 )
 
@@ -34,7 +32,17 @@ func (n *nodeExpandApplyableResource) expandsInstances() {
 }
 
 func (n *nodeExpandApplyableResource) References() []*addrs.Reference {
-	return (&NodeApplyableResource{NodeAbstractResource: n.NodeAbstractResource}).References()
+	refs := n.NodeAbstractResource.References()
+
+	// The expand node needs to connect to the individual resource instances it
+	// references, but cannot refer to it's own instances without causing
+	// cycles. It would be preferable to entirely disallow self references
+	// without the `self` identifier, but those were allowed in provisioners
+	// for compatibility with legacy configuration. We also can't always just
+	// filter them out for all resource node types, because the only method we
+	// have for catching certain invalid configurations are the cycles that
+	// result from these inter-instance references.
+	return filterSelfRefs(n.Addr.Resource, refs)
 }
 
 func (n *nodeExpandApplyableResource) Name() string {
@@ -82,25 +90,6 @@ var (
 
 func (n *NodeApplyableResource) Path() addrs.ModuleInstance {
 	return n.Addr.Module
-}
-
-func (n *NodeApplyableResource) References() []*addrs.Reference {
-	if n.Config == nil {
-		log.Printf("[WARN] NodeApplyableResource %q: no configuration, so can't determine References", dag.VertexName(n))
-		return nil
-	}
-
-	var result []*addrs.Reference
-
-	// Since this node type only updates resource-level metadata, we only
-	// need to worry about the parts of the configuration that affect
-	// our "each mode": the count and for_each meta-arguments.
-	refs, _ := lang.ReferencesInExpr(n.Config.Count)
-	result = append(result, refs...)
-	refs, _ = lang.ReferencesInExpr(n.Config.ForEach)
-	result = append(result, refs...)
-
-	return result
 }
 
 // GraphNodeExecutable
