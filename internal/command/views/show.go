@@ -65,6 +65,7 @@ func (v *ShowHuman) Display(config *configs.Config, plan *plans.Plan, jsonPlan *
 	// Prefer to display a pre-built JSON plan, if we got one; then, fall back
 	// to building one ourselves.
 	if jsonPlan != nil {
+		v.view.streams.Print(v.view.colorize.Color(jsonPlan.RunHeader))
 		renderer.RenderHumanPlan(*jsonPlan.Plan, jsonPlan.Mode, jsonPlan.Opts...)
 	} else if plan != nil {
 		outputs, changed, drift, attrs, err := jsonplan.MarshalForRenderer(plan, schemas)
