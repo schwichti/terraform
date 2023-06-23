@@ -27,14 +27,15 @@ type Show interface {
 	Diagnostics(diags tfdiags.Diagnostics)
 }
 
-// JsonPlan is a wrapper struct that associates a plan mode with a
-// jsonformat.Plan. This is necessary when terraform show receives a
+// JsonPlan is a wrapper struct that associates a plan mode and renderer options
+// with a jsonformat.Plan. This is useful when terraform show receives a
 // pre-constructed json plan, because the json plan format itself doesn't
-// include the run mode.
+// include the additional data required by Display().
 type JsonPlan struct {
-	Plan *jsonformat.Plan
-	Mode plans.Mode
-	Opts []jsonformat.PlanRendererOpt
+	Plan      *jsonformat.Plan
+	Mode      plans.Mode
+	Opts      []jsonformat.PlanRendererOpt
+	RunHeader string
 }
 
 func NewShow(vt arguments.ViewType, view *View) Show {
