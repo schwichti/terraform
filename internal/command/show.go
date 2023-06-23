@@ -231,14 +231,15 @@ func (c *ShowCommand) getRedactedDataFromCloudPlan(plan *cloudplan.SavedPlanBook
 		return nil, fmt.Errorf("can't show a saved cloud plan unless the current root module is connected to Terraform Cloud")
 	}
 
-	jsonPlan, mode, opts, err := cl.ReadRedactedPlanForRun(context.Background(), plan.RunID, plan.Hostname)
+	jsonPlan, mode, opts, runHeader, err := cl.ReadRedactedPlanForRun(context.Background(), plan.RunID, plan.Hostname)
 	if err != nil {
 		return nil, err
 	}
 	return &views.JsonPlan{
-		Plan: jsonPlan,
-		Mode: mode,
-		Opts: opts,
+		Plan:      jsonPlan,
+		Mode:      mode,
+		Opts:      opts,
+		RunHeader: runHeader,
 	}, nil
 }
 
