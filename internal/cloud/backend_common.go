@@ -555,19 +555,20 @@ func (b *Cloud) confirm(stopCtx context.Context, op *backend.Operation, opts *te
 // incidental values that might be important for displaying that plan. It is
 // intended for use by higher-level packages (like the `show` command) that
 // should not need to know things about the TFC API or go-tfe's resource types.
-func (b *Cloud) ReadRedactedPlanForRun(ctx context.Context, runID, hostname string) (*jsonformat.Plan, plans.Mode, []jsonformat.PlanRendererOpt, error) {
+func (b *Cloud) ReadRedactedPlanForRun(ctx context.Context, runID, hostname string) (*jsonformat.Plan, plans.Mode, []jsonformat.PlanRendererOpt, string, error) {
 	mode := plans.NormalMode
 	var opts []jsonformat.PlanRendererOpt
+	header := ""
 
 	// Bail early if wrong hostname
 	if hostname != b.hostname {
-		return nil, mode, opts, fmt.Errorf("hostname for run (%s) does not match the configured cloud integration (%s)", hostname, b.hostname)
+		return nil, mode, opts, header, fmt.Errorf("hostname for run (%s) does not match the configured cloud integration (%s)", hostname, b.hostname)
 	}
 
 	// Get run and plan
-	r, err := b.client.Runs.ReadWithOptions(ctx, runID, &tfe.RunReadOptions{Include: []tfe.RunIncludeOpt{tfe.RunPlan}})
+	r, err := b.client.Runs.ReadWithOptions(ctx, runID, &tfe.RunReadOptions{Include: []tfe.RunIncludeOpt{tfe.RunPlan, tfe.RunWorkspace}})
 	if err != nil {
-		return nil, mode, opts, err
+		return nil, mode, opts, header, err
 	}
 
 	// Sort out the run mode
@@ -590,15 +591,19 @@ func (b *Cloud) ReadRedactedPlanForRun(ctx context.Context, runID, hostname stri
 	default:
 		// Bail, we can't use this.
 		err = fmt.Errorf("can't display a cloud plan that is currently %s", r.Plan.Status)
-		return nil, mode, opts, err
+		return nil, mode, opts, header, err
 	}
 
 	// Fetch the redacted json plan!
 	jsonPlan, err := readRedactedPlan(ctx, b.client.BaseURL(), b.token, r.Plan.ID)
 	if err != nil {
-		return nil, mode, opts, err
+		return nil, mode, opts, header, err
 	}
-	return jsonPlan, mode, opts, nil
+
+	// Format a run header
+	header = fmt.Sprintf(runHeader, b.hostname, b.organization, r.Workspace.Name, r.ID)
+
+	return jsonPlan, mode, opts, header, nil
 }
 
 // This method will fetch the redacted plan output and marshal the response into
